@@ -1,0 +1,134 @@
+#include <Keypad.h>
+#include <SoftwareSerial.h>
+
+SoftwareSerial esp(9, 8); // RX, TX do ESP-01
+
+// Sensor ultrassônico pinos
+const int trigger = A5;
+const int echo = A4;
+float dist;
+
+// Keypad
+const byte LINHAS = 4;
+const byte COLUNAS = 4;
+
+char teclas[LINHAS][COLUNAS] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+
+byte pinosLinhas[LINHAS] = {2, 3, 6, 7};
+byte pinosColunas[COLUNAS] = {10, 11, 12, 13};
+
+Keypad teclado = Keypad(makeKeymap(teclas), pinosLinhas, pinosColunas, LINHAS, COLUNAS);
+
+String entrada = "";
+bool alarmeBloqueado = false;
+const String senhaCorreta = "1234";
+
+// Wi-Fi
+const char* ssid = "Guilherme";
+const char* password = "chicogabriel";
+const char* servidor = "192.168.0.108";
+
+void enviarParaServidor(String status) {
+  Serial.println("Enviando status: " + status);
+
+  esp.println("AT+CIPSTART=\"TCP\",\"" + String(servidor) + "\",80");
+  delay(2500);
+
+  String getRequest = "GET /alarme.php?status=" + status + " HTTP/1.1\r\nHost: " + servidor + "\r\nConnection: close\r\n\r\n";
+  int len = getRequest.length();
+
+  esp.print("AT+CIPSEND=");
+  esp.println(len);
+  delay(1000);
+
+  esp.print(getRequest);
+  delay(3000);
+
+  esp.println("AT+CIPCLOSE");
+  delay(1000);
+}
+
+void conectarWiFi() {
+  esp.println("AT+RST");
+  delay(3000);
+  esp.println("AT+CWMODE=1"); // modo estação
+  delay(1000);
+
+  esp.print("AT+CWJAP=\"");
+  esp.print(ssid);
+  esp.print("\",\"");
+  esp.print(password);
+  esp.println("\"");
+  delay(8000);
+}
+
+void setup() {
+  Serial.begin(9600);
+  esp.begin(9600);
+  pinMode(trigger, OUTPUT);
+  pinMode(echo, INPUT);
+
+  Serial.println("Iniciando conexão Wi-Fi...");
+  conectarWiFi();
+  Serial.println("Setup completo.");
+}
+
+void loop() {
+  digitalWrite(trigger, LOW);
+  delayMicroseconds(5);
+  digitalWrite(trigger, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigger, LOW);
+
+  dist = pulseIn(echo, HIGH);
+  dist = dist / 58.0;
+
+  Serial.print("Distância: ");
+  Serial.print(dist, 1);
+  Serial.println(" cm");
+
+  if (!alarmeBloqueado) {
+    if (dist < 150) {
+      alarmeBloqueado = true;
+      entrada = "";
+      Serial.println("Alarme bloqueado! Digite a senha.");
+      enviarParaServidor("DISPARADO");
+    }
+  } else {
+    char tecla = teclado.getKey();
+    if (tecla) {
+      Serial.print("Tecla pressionada: ");
+      Serial.println(tecla);
+
+      if (tecla == '#') {
+        entrada = "";
+        Serial.println("Entrada apagada.");
+      } else if (tecla >= '0' && tecla <= '9') {
+        if (entrada.length() < 4) {
+          entrada += tecla;
+          Serial.print("Senha: ");
+          for (int i = 0; i < entrada.length(); i++) Serial.print("*");
+          Serial.println();
+        }
+      }
+
+      if (entrada.length() == 4) {
+        if (entrada == senhaCorreta) {
+          alarmeBloqueado = false;
+          entrada = "";
+          Serial.println("Senha correta. Alarme desbloqueado.");
+          enviarParaServidor("DESATIVADO");
+        } else {
+          entrada = "";
+          Serial.println("Senha incorreta. Tente novamente.");
+        }
+      }
+    }
+  }
+  delay(200);
+}
