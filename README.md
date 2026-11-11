@@ -33,3 +33,11 @@ O teste é uma triagem fixa e curta, não certificação CEFR, e não avalia fal
 
 Dentro de `english_coach`: `python -m unittest discover -s tests`.
 Testes cobrem comparação textual, persistência e intervalo semanal. A execução completa de voz no Windows e inferência com os modelos requer validação no computador de destino.
+
+## Conversa contínua com interrupção
+
+Abra `english_coach/live.bat` e acesse **http://127.0.0.1:8502** no Edge ou Chrome. Selecione uma voz inglesa local e clique em **Iniciar conversa**. O navegador pede acesso ao microfone uma vez. Ao terminar uma frase, uma pausa de 950 ms envia automaticamente o áudio; ajuste essa pausa para seu ritmo. A resposta chega em partes e é falada por frases. Começar a falar cancela imediatamente a voz e descarta a resposta anterior. Clique em **Encerrar** para desligar o microfone.
+
+Use fones. A detecção por energia precisa de cerca de 140 ms de som e pode confundir ruído com fala; ajuste o limiar (menor = mais sensível). Não é um detector neural de turnos. Há um limite de 20 segundos por trecho. A transcrição em CPU e a geração no Ollama ainda têm latência; não se promete resposta instantânea. O primeiro uso baixa/carrega o Whisper. Vozes remotas do navegador são excluídas; instale uma voz inglesa offline do Windows se a lista estiver vazia.
+
+Este modo mantém contexto apenas durante a conexão e não salva áudio ou conversa. Interrupções descartam tokens em trânsito; um trabalho de transcrição já iniciado termina em segundo plano, sem reproduzir sua resposta. O histórico pode incluir uma resposta completa que você interrompeu durante a reprodução. Os testes semanais continuam no aplicativo original (`start.bat`). Para iniciar offline após instalar: `.venv\Scripts\python.exe -m uvicorn live:app --host 127.0.0.1 --port 8502` dentro de `english_coach`.
